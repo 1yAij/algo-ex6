@@ -1,0 +1,4 @@
+dataset,n,dinic_std_mean_ms,dinic_std_std_ms,dinic_nv_mean_ms,dinic_nv_std_ms,repeats
+teams4.txt,4,0.0362,0.0121,0.0422,0.0341,10
+teams60.txt,60,31.3432,2.7647,47.9368,2.0556,10
+teams50.txt,50,136.8529,5.1432,561.7849,11.7840,10

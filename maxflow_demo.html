@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>棒球赛淘汰 — 最大流建模与最小割证书</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;font-family:'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif;background:#f2f4f7;color:#222}
+.page{display:flex;height:100vh;gap:10px;padding:10px}
+.col-left{width:245px;flex-shrink:0;display:flex;flex-direction:column;gap:8px}
+.col-mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.col-right{width:320px;flex-shrink:0;display:flex;flex-direction:column;gap:8px}
+.card{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.05);padding:10px 14px}
+.card h3{font-size:14px;margin-bottom:6px;color:#1a237e;border-bottom:2px solid #e8eaf6;padding-bottom:4px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{border:1px solid #e0e3eb;padding:4px 6px;text-align:center}
+th{background:#e8eaf6;font-weight:600;font-size:11px}
+tr.target{background:#fff3e0;font-weight:700}
+tr.target td:first-child::after{content:' ★';color:#e65100;font-size:9px}
+.highlight{color:#c62828;font-weight:700}
+.accent{color:#e65100;font-weight:600}
+.btn{font-size:12px;padding:7px 0;border:none;border-radius:6px;cursor:pointer;font-weight:600;transition:all 0.15s;width:100%}
+.btn-model{background:#1a237e;color:#fff}
+.btn-model:hover{background:#283593}
+.btn-cert{background:#e65100;color:#fff}
+.btn-cert:hover{background:#bf360c}
+.btn-step{background:#455a64;color:#fff}
+.btn-step:hover{background:#37474f}
+.btn-reset{background:#fff;color:#1a237e;border:2px solid #1a237e}
+.btn-reset:hover{background:#e8eaf6}
+.btn:disabled{opacity:0.35;cursor:not-allowed}
+.btn-sm{font-size:11px;padding:5px 0}
+.btn-row{display:flex;gap:4px}
+.btn-row .btn{flex:1}
+.panel-title{font-size:16px;font-weight:700;color:#1a237e;text-align:center}
+.panel-sub{font-size:11px;color:#666;text-align:center;margin-bottom:4px}
+#graphBox{flex:1;min-height:0}
+#graphBox svg{width:100%;height:100%}
+.ineq-box{font-family:'SF Mono','Consolas',monospace;font-size:14px;background:#fafafa;border:1.5px solid #e0e3eb;border-radius:6px;padding:8px;text-align:center;line-height:1.8}
+.ineq-box .big{font-size:18px;font-weight:700}
+.cert-set{font-size:16px;font-weight:700;color:#c62828;text-align:center;padding:6px;background:#ffebee;border-radius:6px}
+.explain{font-size:12px;line-height:1.6;color:#555;margin-top:6px}
+.log-box{font-family:'SF Mono','Consolas',monospace;font-size:10px;max-height:100px;overflow-y:auto;background:#fafafa;border:1px solid #e0e3eb;border-radius:4px;padding:6px;line-height:1.5;margin-top:4px}
+.log-box .lhl{color:#1a237e;font-weight:700}
+.log-box .lcut{color:#c62828;font-weight:700}
+.step-title{font-size:15px;font-weight:700;color:#1a237e;margin-bottom:4px}
+.step-conclusion{font-size:13px;font-weight:700;padding:6px 8px;border-radius:4px;margin-top:4px}
+.conclusion-running{background:#e8eaf6;color:#1a237e}
+.conclusion-alert{background:#ffebee;color:#c62828}
+.conclusion-final{background:#c62828;color:#fff}
+.info-item{font-size:12px;margin:2px 0;display:flex;justify-content:space-between}
+.info-item .lbl{color:#666}
+.info-item .val{font-weight:600}
+</style>
+</head>
+<body>
+
+<div class="page">
+
+<!-- ===== LEFT ===== -->
+<div class="col-left">
+  <div class="card" style="padding:8px 12px">
+    <div style="font-size:14px;font-weight:700;color:#1a237e;text-align:center">赛季数据</div>
+    <table style="margin-top:4px">
+      <tr><th>球队</th><th>w</th><th>r</th></tr>
+      <tr><td>Atlanta</td><td>83</td><td>8</td></tr>
+      <tr class="target"><td>Philadelphia</td><td>80</td><td>3</td></tr>
+      <tr><td>New_York</td><td>78</td><td>6</td></tr>
+      <tr><td>Montreal</td><td>77</td><td>3</td></tr>
+    </table>
+    <div style="font-size:10px;color:#888;margin-top:2px">★ 目标 x=Philadelphia, M<sub>x</sub>=83</div>
+  </div>
+
+  <div class="card" style="padding:8px 12px">
+    <h3>操作</h3>
+    <div class="btn-row" style="margin-bottom:4px"><button class="btn btn-model btn-sm" onclick="showModel()">显示建模</button><button class="btn btn-cert btn-sm" onclick="showCert()">显示证书</button></div>
+    <div class="btn-row" style="margin-bottom:4px"><button class="btn btn-step btn-sm" onclick="startDemo()">分步演示</button><button class="btn btn-reset btn-sm" onclick="resetAll()">重置</button></div>
+    <div class="btn-row" style="margin-bottom:4px"><button class="btn btn-sm" style="background:#37474f;color:#fff" id="btnPrev" onclick="goPrev()" disabled>◀ 上一步</button></div>
+    <div class="btn-row" style="margin-bottom:4px"><button class="btn btn-sm" style="background:#37474f;color:#fff" id="btnNext" onclick="goNext()" disabled>下一步 ▶</button></div>
+    <div class="btn-row"><button class="btn btn-sm" style="background:#546e7a;color:#fff" id="btnAuto" onclick="autoPlay()" disabled>▶ 自动播放</button></div>
+    <div style="font-size:11px;text-align:center;margin-top:4px;color:#999" id="stepLabel">点击"分步演示"开始</div>
+  </div>
+</div>
+
+<!-- ===== MIDDLE ===== -->
+<div class="col-mid">
+  <div class="panel-title">最大流网络：剩余比赛胜场分配</div>
+  <div class="panel-sub">源点 S → 比赛节点 → 球队节点 → 汇点 T</div>
+  <div class="card" style="flex:1;padding:4px;display:flex;align-items:center;justify-content:center">
+    <div id="graphBox"></div>
+  </div>
+</div>
+
+<!-- ===== RIGHT ===== -->
+<div class="col-right">
+  <div class="card" style="padding:8px 12px">
+    <h3 id="rightTitle">最大流判定</h3>
+    <div id="rightContent">
+      <p style="font-size:12px;line-height:1.5">满流（F = G<sub>x</sub>）⇒ 未被淘汰<br>无法满流（F < G<sub>x</sub>）⇒ <span class="highlight">被淘汰</span></p>
+      <div style="font-size:13px;margin-top:6px;padding:6px;background:#fff3e0;border-radius:4px">
+        源点总容量 G<sub>x</sub> = 6 + 1 = <strong>7</strong><br>
+        最大流 F = <span class="highlight"><strong>6</strong></span><br>
+        F < G<sub>x</sub> ⇒ <span class="highlight" style="font-size:14px"><strong>Philadelphia 被淘汰</strong></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="padding:8px 12px">
+    <h3>最小割证书</h3>
+    <div class="cert-set" id="certSet">R = {Atlanta, New_York}</div>
+    <div class="ineq-box" id="ineqBox">
+      <div class="big">83 + 78 + 6 > 2 × 83</div>
+      <div style="color:#c62828;font-weight:700">167 > 166</div>
+    </div>
+    <div class="explain" id="certExplain">
+      Atlanta 和 New_York 当前已有胜场（83+78=161），加上它们之间剩余 6 场比赛必然产生的 6 个胜场，总共 167 个胜场。但两支球队在 Philadelphia 最高 83 胜限制下最多只能共同容纳 2×83=166 场胜利。因此 Philadelphia 不可能获得并列第一。
+    </div>
+  </div>
+
+  <div class="card" style="flex:1;padding:8px 12px;overflow:hidden;display:flex;flex-direction:column">
+    <h3>算法日志</h3>
+    <div class="log-box" id="logBox" style="flex:1;max-height:none">
+      <div style="color:#999">点击"分步演示"开始</div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<script>
+// ===== NETWORK DATA =====
+var TEAMS = [
+  {name:'Atlanta',     w:83, r:8},
+  {name:'Philadelphia',w:80, r:3, isTarget:true},
+  {name:'New_York',   w:78, r:6},
+  {name:'Montreal',    w:77, r:3},
+];
+var Mx = 83; // 80+3
+
+var NODES = [
+  {id:'S',     x:60,  y:280, type:'source'},
+  {id:'G_AN',  x:240, y:120, type:'game',   label:'game(ATL,NY)', sub:'6'},
+  {id:'G_AM',  x:240, y:440, type:'game',   label:'game(ATL,MON)', sub:'1'},
+  {id:'T_A',   x:500, y:100, type:'team',   label:'team(ATL)', cap:'83−83=0'},
+  {id:'T_N',   x:500, y:280, type:'team',   label:'team(NY)',  cap:'83−78=5'},
+  {id:'T_M',   x:500, y:440, type:'team',   label:'team(MON)', cap:'83−77=6'},
+  {id:'T',     x:780, y:280, type:'sink'},
+];
+
+var EDGES_DEF = [
+  {id:'e_s_gan',  from:'S', to:'G_AN', cap:6},
+  {id:'e_s_gam',  from:'S', to:'G_AM', cap:1},
+  {id:'e_gan_ta', from:'G_AN', to:'T_A', cap:Infinity},
+  {id:'e_gan_tn', from:'G_AN', to:'T_N', cap:Infinity},
+  {id:'e_gam_ta', from:'G_AM', to:'T_A', cap:Infinity},
+  {id:'e_gam_tm', from:'G_AM', to:'T_M', cap:Infinity},
+  {id:'e_ta_t',   from:'T_A', to:'T',   cap:0},
+  {id:'e_tn_t',   from:'T_N', to:'T',   cap:5},
+  {id:'e_tm_t',   from:'T_M', to:'T',   cap:6},
+];
+
+function nodeById(id){ for(var i=0;i<NODES.length;i++){if(NODES[i].id===id)return NODES[i];} return null; }
+function edgeById(id){ for(var i=0;i<EDGES_DEF.length;i++){if(EDGES_DEF[i].id===id)return EDGES_DEF[i];} return null; }
+
+// ===== STEPS =====
+function capStr(c){ return c===Infinity?'∞':String(c); }
+
+var FLOW0 = {}; EDGES_DEF.forEach(function(e){FLOW0[e.id]=0;});
+
+// Helper: build path entries
+function pathEntry(edges,bottle){
+  return {edges:edges,bottle:bottle,label:edges.map(function(id){return id.replace('e_','').replace(/_/g,'→').replace('s→','S→').replace('gan','game(ATL,NY)').replace('gam','game(ATL,MON)').replace('ta','team(ATL)').replace('tn','team(NY)').replace('tm','team(MON)');}).join(' → ')};
+}
+
+var STEPS = [];
+
+// Step 0: Init
+STEPS.push({
+  title:'初始化 Philadelphia 的最大流网络',
+  mode:'init',
+  flow:Object.assign({},FLOW0),
+  hlNodes:['S','G_AN','G_AM','T_A','T_N','T_M','T'],
+  hlEdges:[],
+  bottleneckEdges:[],
+  certNodes:[],
+  pathDesc:'',
+  bottleVal:'—',
+  curFlow:0,
+  totalCap:7,
+  conclusion:'开始计算：G<sub>x</sub>=7，需判断 F 能否达到 7',
+  conclusionType:'running',
+  explain:'Philadelphia 当前 80 胜，剩余 3 场，最高可能胜场 W<sub>x</sub>=83。除 Philadelphia 外，ATL-NY 剩 6 场、ATL-MON 剩 1 场，共 7 个胜场必须分配。构造最大流网络：源点总容量 G<sub>x</sub>=7。若最大流 F 能达到 7，则 Philadelphia 未被淘汰；否则被淘汰。',
+});
+
+// Step 1: Find path 1
+STEPS.push({
+  title:'第 1 轮：找到增广路径',
+  mode:'path',
+  flow:Object.assign({},FLOW0),
+  hlNodes:['S','G_AM','T_M','T'],
+  hlEdges:['e_s_gam','e_gam_tm','e_tm_t'],
+  bottleneckEdges:['e_s_gam'],
+  certNodes:[],
+  pathDesc:'S → game(ATL,MON) → team(MON) → T',
+  bottleVal:'min(1, ∞, 6) = 1',
+  curFlow:0,
+  totalCap:7,
+  conclusion:'找到路径，瓶颈 = 1',
+  conclusionType:'running',
+  explain:'首先选择 ATL 与 MON 之间的 1 场剩余比赛。S→game(ATL,MON) 容量 1，game(ATL,MON)→team(MON) 容量 ∞，team(MON)→T 容量 6，存在一条可行增广路径。瓶颈为路径上最小容量：min(1,∞,6)=1。',
+});
+
+// Step 2: Augment 1
+var flow2 = Object.assign({},FLOW0);
+flow2['e_s_gam']=1; flow2['e_gam_tm']=1; flow2['e_tm_t']=1;
+STEPS.push({
+  title:'第 1 轮：沿路径增广 1',
+  mode:'augment',
+  flow:flow2,
+  hlNodes:['S','G_AM','T_M','T'],
+  hlEdges:['e_s_gam','e_gam_tm','e_tm_t'],
+  bottleneckEdges:[],
+  certNodes:[],
+  pathDesc:'S → game(ATL,MON) → team(MON) → T',
+  bottleVal:'增广 1',
+  curFlow:1,
+  totalCap:7,
+  conclusion:'F = 1 < 7，仍有 6 个胜场需要分配',
+  conclusionType:'running',
+  explain:'沿路径增广 1 个单位流：S→game(ATL,MON) 满 1/1，game(ATL,MON)→team(MON) 1/∞，team(MON)→T 1/6。表示将 ATL-MON 的 1 场胜利分配给 Montreal。当前 F=1，还有 6 个胜场待分配。',
+});
+
+// Step 3: Find path 2
+STEPS.push({
+  title:'第 2 轮：找到增广路径',
+  mode:'path',
+  flow:flow2,
+  hlNodes:['S','G_AN','T_N','T'],
+  hlEdges:['e_s_gan','e_gan_tn','e_tn_t'],
+  bottleneckEdges:['e_tn_t'],
+  certNodes:[],
+  pathDesc:'S → game(ATL,NY) → team(NY) → T',
+  bottleVal:'min(6, ∞, 5) = 5',
+  curFlow:1,
+  totalCap:7,
+  conclusion:'找到路径，瓶颈 = 5',
+  conclusionType:'running',
+  explain:'ATL 与 NY 之间还剩 6 场比赛。由于 Atlanta 已有 83 胜，team(ATL)→T 容量为 0，Atlanta 不能再接收胜场。因此只能将胜场分配给 New_York（容量 83−78=5）。瓶颈 = min(6,∞,5)=5。',
+});
+
+// Step 4: Augment 5
+var flow4 = Object.assign({},flow2);
+flow4['e_s_gan']=5; flow4['e_gan_tn']=5; flow4['e_tn_t']=5;
+STEPS.push({
+  title:'第 2 轮：沿路径增广 5',
+  mode:'augment',
+  flow:flow4,
+  hlNodes:['S','G_AN','T_N','T'],
+  hlEdges:['e_s_gan','e_gan_tn','e_tn_t'],
+  bottleneckEdges:[],
+  certNodes:[],
+  pathDesc:'S → game(ATL,NY) → team(NY) → T',
+  bottleVal:'增广 5',
+  curFlow:6,
+  totalCap:7,
+  conclusion:'F = 6 < 7，仍有 1 个胜场无法分配',
+  conclusionType:'running',
+  explain:'沿路径增广 5：S→game(ATL,NY) 5/6，game(ATL,NY)→team(NY) 5/∞，team(NY)→T 5/5 已满。当前 F=1+5=6。还有 S→game(ATL,NY) 剩余 1 个容量无法送出。',
+});
+
+// Step 5: Blocked
+STEPS.push({
+  title:'第 3 轮：无法继续增广',
+  mode:'blocked',
+  flow:flow4,
+  hlNodes:['G_AN','T_A','T_N'],
+  hlEdges:['e_s_gan'],
+  bottleneckEdges:['e_ta_t','e_tn_t'],
+  certNodes:['T_A','T_N'],
+  pathDesc:'—',
+  bottleVal:'—',
+  curFlow:6,
+  totalCap:7,
+  conclusion:'F = 6 < G<sub>x</sub> = 7，无法满流',
+  conclusionType:'alert',
+  explain:'S→game(ATL,NY) 还剩 1 个单位容量。但这 1 个胜场只能分配给 Atlanta 或 New_York。team(ATL)→T 容量为 0（已 83 胜），team(NY)→T 已满 5/5。剩余 1 个胜场无路可走——无法被合法分配。',
+});
+
+// Step 6: Verdict
+STEPS.push({
+  title:'最大流不满：Philadelphia 被淘汰',
+  mode:'verdict',
+  flow:flow4,
+  hlNodes:[],
+  hlEdges:[],
+  bottleneckEdges:['e_ta_t','e_tn_t'],
+  certNodes:[],
+  pathDesc:'—',
+  bottleVal:'—',
+  curFlow:6,
+  totalCap:7,
+  conclusion:'<b>F = 6 < G<sub>x</sub> = 7 ⇒ Philadelphia 被非平凡淘汰</b>',
+  conclusionType:'final',
+  explain:'源点总容量 G<sub>x</sub>=7 表示所有剩余比赛必然产生 7 个胜场。最大流仅 F=6，意味着至少 1 个胜场无法在"不超过 83 胜"的限制下分配。不存在合法赛程安排使 Philadelphia 保持第一或并列第一。',
+});
+
+// Step 7: Certificate
+STEPS.push({
+  title:'最小割证书：R = {Atlanta, New_York}',
+  mode:'cert',
+  flow:flow4,
+  hlNodes:['G_AN','T_A','T_N'],
+  hlEdges:['e_s_gan','e_gan_ta','e_gan_tn','e_ta_t','e_tn_t'],
+  bottleneckEdges:['e_ta_t','e_tn_t'],
+  certNodes:['T_A','T_N','G_AN'],
+  pathDesc:'—',
+  bottleVal:'—',
+  curFlow:6,
+  totalCap:7,
+  conclusion:'<b>83 + 78 + 6 > 2 × 83 ⇒ 167 > 166</b>',
+  conclusionType:'final',
+  explain:'证书 R={Atlanta,New_York}：两队当前胜场 83+78=161，加内部剩余 6 场必产生 6 个胜场 = 167。但两队合计最多容纳 2×83=166。167>166，Philadelphia 不可能获得并列第一。',
+});
+
+// ===== STATE =====
+var demoMode = false;
+var stepIdx = 0;
+var viewMode = 'init'; // 'init'|'model'|'demo'|'cert'
+
+// ===== SVG RENDER =====
+function render(){
+  var vbW=1000, vbH=560;
+  var s='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+vbW+' '+vbH+'" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">';
+  s+='<defs>';
+  s+='<marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerW="5" markerH="5" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="#8899aa"/></marker>';
+  s+='<marker id="arrHL" viewBox="0 0 10 10" refX="9" refY="5" markerW="7" markerH="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="#e65100"/></marker>';
+  s+='<marker id="arrRed" viewBox="0 0 10 10" refX="9" refY="5" markerW="7" markerH="7" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="#c62828"/></marker>';
+  s+='<marker id="arrBlue" viewBox="0 0 10 10" refX="9" refY="5" markerW="6" markerH="6" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="#1a237e"/></marker>';
+  s+='</defs>';
+
+  var step = demoMode ? STEPS[stepIdx] : null;
+  var hlNodes = step ? step.hlNodes : [];
+  var hlEdges = step ? step.hlEdges : [];
+  var bottleneckEdges = step ? step.bottleneckEdges : [];
+  var certNodes = step ? step.certNodes : [];
+  var flow = step ? step.flow : FLOW0;
+
+  // In model-only mode
+  if(viewMode==='model' && !demoMode){
+    hlNodes=['S','G_AN','G_AM','T_A','T_N','T_M','T'];
+    EDGES_DEF.forEach(function(e){hlEdges.push(e.id);});
+    bottleneckEdges=['e_ta_t'];
+  }
+  if(viewMode==='cert' && !demoMode){
+    hlNodes=['T_A','T_N','G_AN'];
+    hlEdges=['e_s_gan','e_gan_ta','e_gan_tn','e_ta_t','e_tn_t'];
+    bottleneckEdges=['e_ta_t','e_tn_t'];
+    certNodes=['T_A','T_N','G_AN'];
+  }
+
+  // Certificate highlight box
+  if(certNodes.length>0 && (demoMode||viewMode==='cert')){
+    var bNodes = certNodes.map(function(id){return nodeById(id);});
+    var minX=9999,minY=9999,maxX=0,maxY=0;
+    bNodes.forEach(function(n){minX=Math.min(minX,n.x);minY=Math.min(minY,n.y);maxX=Math.max(maxX,n.x);maxY=Math.max(maxY,n.y);});
+    s+='<rect x="'+(minX-40)+'" y="'+(minY-38)+'" width="'+(maxX-minX+80)+'" height="'+(maxY-minY+76)+'" rx="14" fill="none" stroke="#e65100" stroke-width="2.5" stroke-dasharray="8,3" opacity="0.8"/>';
+    s+='<text x="'+((minX+maxX)/2)+'" y="'+(minY-44)+'" text-anchor="middle" font-size="11" fill="#e65100" font-weight="700">证书集合 R</text>';
+  } else if(viewMode==='model' && !demoMode){
+    s+='<rect x="185" y="70" width="380" height="370" rx="14" fill="none" stroke="#e65100" stroke-width="2" stroke-dasharray="8,3" opacity="0.4"/>';
+    s+='<text x="375" y="58" text-anchor="middle" font-size="11" fill="#e65100" font-weight="600">关键冲突区：剩余比赛胜场分配</text>';
+  }
+
+  // Draw edges
+  EDGES_DEF.forEach(function(e){
+    var fu=nodeById(e.from), fv=nodeById(e.to);
+    var dx=fv.x-fu.x, dy=fv.y-fu.y, len=Math.sqrt(dx*dx+dy*dy);
+    var ux=dx/len, uy=dy/len;
+    var sx=fu.x+28*ux, sy=fu.y+28*uy;
+    var ex=fv.x-30*ux, ey=fv.y-30*uy;
+    var isHL=hlEdges.indexOf(e.id)>=0;
+    var isBot=bottleneckEdges.indexOf(e.id)>=0;
+    var color=isBot?'#c62828':(isHL?'#e65100':'#aabbcc');
+    var w=isBot?3.5:(isHL?2.5:1.5);
+    var mk=isBot?'url(#arrRed)':(isHL?'url(#arrHL)':'url(#arr)');
+    var dash=isHL&&!isBot?' stroke-dasharray="6,3"':'';
+    var opacity=(demoMode||viewMode==='model'||viewMode==='cert')?(isHL||isBot?1:0.25):0.7;
+    if(!demoMode&&viewMode==='init')opacity=0.7;
+    s+='<line x1="'+sx+'" y1="'+sy+'" x2="'+ex+'" y2="'+ey+'" stroke="'+color+'" stroke-width="'+w+'" marker-end="'+mk+'"'+dash+' opacity="'+opacity+'"/>';
+
+    // Label: flow/capacity in demo mode
+    var mx=(sx+ex)/2, my=(sy+ey)/2, px=-uy*18, py=ux*18;
+    var f = flow[e.id]||0;
+    var cap = e.cap;
+    var label;
+    if(demoMode){
+      label = f+'/'+capStr(cap);
+    } else {
+      label = capStr(cap);
+    }
+    var flowColor = f>0?'#1a237e':(isBot?'#c62828':(isHL?'#e65100':'#667'));
+    var fw = f>0?'700':'500';
+    s+='<text x="'+(mx+px)+'" y="'+(my+py)+'" text-anchor="middle" dominant-baseline="middle" font-size="12" fill="'+flowColor+'" font-weight="'+fw+'" opacity="'+opacity+'">'+label+'</text>';
+  });
+
+  // Draw nodes
+  NODES.forEach(function(n){
+    var isHL=hlNodes.indexOf(n.id)>=0;
+    var opacity=(demoMode||viewMode==='model'||viewMode==='cert')?(isHL?1:0.25):1;
+    if(!demoMode&&viewMode==='init')opacity=1;
+    var g='<g opacity="'+opacity+'">';
+
+    if(isHL&&(demoMode||viewMode==='model'||viewMode==='cert')){
+      var ringColor=(certNodes.indexOf(n.id)>=0)?'#e65100':'#1a237e';
+      g+='<circle cx="'+n.x+'" cy="'+n.y+'" r="32" fill="none" stroke="'+ringColor+'" stroke-width="3" stroke-dasharray="5,3"/>';
+    }
+
+    var fill, shape='circle';
+    if(n.type==='source'){fill='#1a237e';}
+    else if(n.type==='sink'){fill='#c62828';}
+    else if(n.type==='game'){fill='#bbdefb';shape='rect';}
+    else if(n.type==='team'){fill='#c8e6c9';shape='rect';}
+
+    if(shape==='rect'){
+      var rw=n.type==='game'?108:90, rh=38, rx=n.x-rw/2, ry=n.y-rh/2;
+      g+='<rect x="'+rx+'" y="'+ry+'" width="'+rw+'" height="'+rh+'" rx="8" fill="'+fill+'" stroke="'+(isHL?'#1a237e':'#889')+'" stroke-width="'+(isHL?'2.5':'1.5')+'"/>';
+      g+='<text x="'+n.x+'" y="'+(n.y-3)+'" text-anchor="middle" dominant-baseline="middle" font-size="10" fill="#222" font-weight="600">'+(n.label||n.id)+'</text>';
+      if(n.cap){
+        g+='<text x="'+n.x+'" y="'+(n.y+13)+'" text-anchor="middle" dominant-baseline="middle" font-size="9" fill="#555" font-weight="500">'+n.cap+'</text>';
+      }
+    } else {
+      var r=n.type==='source'||n.type==='sink'?28:24;
+      g+='<circle cx="'+n.x+'" cy="'+n.y+'" r="'+r+'" fill="'+fill+'" stroke="#fff" stroke-width="2"/>';
+      var fs=n.type==='source'||n.type==='sink'?15:13;
+      g+='<text x="'+n.x+'" y="'+(n.y+0.5)+'" text-anchor="middle" dominant-baseline="middle" font-size="'+fs+'" fill="#fff" font-weight="700">'+(n.label||n.id)+'</text>';
+    }
+    if(n.sub){
+      g+='<text x="'+n.x+'" y="'+(n.y+(shape==='rect'?30:40))+'" text-anchor="middle" font-size="9" fill="#666">容量='+n.sub+'</text>';
+    }
+    g+='</g>';
+    s+=g;
+  });
+
+  // Bottom caption
+  if(demoMode && step){
+    s+='<text x="500" y="550" text-anchor="middle" font-size="11" fill="#555">Step '+(stepIdx+1)+'/'+STEPS.length+' · '+step.title+'</text>';
+  } else if(viewMode==='model'){
+    s+='<text x="500" y="550" text-anchor="middle" font-size="11" fill="#555">S=剩余胜场来源 | 比赛节点=必须分配的胜场 | 球队节点=接收方 | T=合法终点</text>';
+  } else if(viewMode==='cert'){
+    s+='<text x="500" y="550" text-anchor="middle" font-size="11" fill="#c62828" font-weight="600">割容量 = 0 + 5 + 1 = 6 = 最大流 ✓ | 证书 R = {Atlanta, New_York}</text>';
+  }
+  s+='</svg>';
+  document.getElementById('graphBox').innerHTML=s;
+}
+
+// ===== UPDATE RIGHT PANEL =====
+function updateRight(){
+  var step = demoMode ? STEPS[stepIdx] : null;
+  var titleEl = document.getElementById('rightTitle');
+  var contentEl = document.getElementById('rightContent');
+
+  if(!step){
+    titleEl.textContent = '最大流判定';
+    contentEl.innerHTML = '<p style="font-size:12px;line-height:1.5">满流（F = G<sub>x</sub>）⇒ 未被淘汰<br>无法满流（F < G<sub>x</sub>）⇒ <span class="highlight">被淘汰</span></p><div style="font-size:13px;margin-top:6px;padding:6px;background:#fff3e0;border-radius:4px">源点总容量 G<sub>x</sub> = 6 + 1 = <strong>7</strong><br>最大流 F = <span class="highlight"><strong>6</strong></span><br>F < G<sub>x</sub> ⇒ <span class="highlight" style="font-size:14px"><strong>Philadelphia 被淘汰</strong></span></div>';
+    return;
+  }
+
+  var cls = step.conclusionType==='final'?'conclusion-final':(step.conclusionType==='alert'?'conclusion-alert':'conclusion-running');
+  var html = '';
+  html += '<div class="step-title">'+step.title+'</div>';
+  html += '<div class="explain" style="margin-bottom:6px">'+step.explain+'</div>';
+  html += '<div class="info-item"><span class="lbl">增广路径：</span><span class="val" style="color:#e65100">'+step.pathDesc+'</span></div>';
+  html += '<div class="info-item"><span class="lbl">瓶颈：</span><span class="val">'+step.bottleVal+'</span></div>';
+  html += '<div class="info-item"><span class="lbl">当前 F：</span><span class="val">'+step.curFlow+'</span></div>';
+  html += '<div class="info-item"><span class="lbl">G<sub>x</sub>：</span><span class="val">'+step.totalCap+'</span></div>';
+  html += '<div class="step-conclusion '+cls+'">'+step.conclusion+'</div>';
+  titleEl.textContent = '分步演示';
+  contentEl.innerHTML = html;
+}
+
+function addLog(msg, cls){
+  var box=document.getElementById('logBox');
+  var span=cls||'lhl';
+  if(box.children.length===1&&box.children[0].textContent.indexOf('点击')>=0){box.innerHTML='';}
+  box.innerHTML+='<div><span class="'+span+'">'+msg+'</span></div>';
+  box.scrollTop=box.scrollHeight;
+}
+
+// ===== NAVIGATION =====
+function goToStep(idx){
+  if(idx<0||idx>=STEPS.length)return;
+  stepIdx=idx;
+  updateRight();
+  render();
+  document.getElementById('btnPrev').disabled=(stepIdx===0);
+  document.getElementById('btnNext').disabled=(stepIdx===STEPS.length-1);
+  document.getElementById('stepLabel').textContent='Step '+(stepIdx+1)+'/'+STEPS.length;
+}
+
+function startDemo(){
+  demoMode=true;viewMode='demo';stepIdx=0;
+  document.getElementById('logBox').innerHTML='';
+  addLog('[Step 1] 初始化网络，G<sub>x</sub>=7，F=0','lhl');
+  goToStep(0);
+  document.getElementById('btnAuto').disabled=false;
+}
+
+function goNext(){
+  if(!demoMode)return;
+  if(stepIdx>=STEPS.length-1)return;
+  stepIdx++;
+  goToStep(stepIdx);
+  var s=STEPS[stepIdx];
+  var cls=s.mode==='cert'||s.mode==='verdict'||s.mode==='blocked'?'lcut':'lhl';
+  addLog('[Step '+(stepIdx+1)+'] '+s.title,cls);
+}
+
+function goPrev(){
+  if(!demoMode||stepIdx<=0)return;
+  stepIdx--;
+  goToStep(stepIdx);
+}
+
+var autoTimer=null;
+function autoPlay(){
+  if(autoTimer){clearInterval(autoTimer);autoTimer=null;document.getElementById('btnAuto').textContent='▶ 自动播放';return;}
+  document.getElementById('btnAuto').textContent='⏸ 暂停';
+  autoTimer=setInterval(function(){
+    if(stepIdx>=STEPS.length-1){clearInterval(autoTimer);autoTimer=null;document.getElementById('btnAuto').textContent='▶ 自动播放';return;}
+    goNext();
+  },1200);
+}
+
+function showModel(){
+  demoMode=false;viewMode='model';
+  if(autoTimer){clearInterval(autoTimer);autoTimer=null;document.getElementById('btnAuto').textContent='▶ 自动播放';}
+  document.getElementById('btnPrev').disabled=true;
+  document.getElementById('btnNext').disabled=true;
+  document.getElementById('btnAuto').disabled=true;
+  document.getElementById('stepLabel').textContent='建模模式';
+  document.getElementById('rightTitle').textContent='最大流建模';
+  document.getElementById('rightContent').innerHTML='<p style="font-size:12px;line-height:1.5">S → 比赛节点 → 球队节点 → T<br><br>S→G: 剩余比赛场数<br>G→T_i, T_j: 胜场分配给参赛方<br>T_i→T: M<sub>x</sub>−w<sub>i</sub>（容量上限）</p><div style="margin-top:6px;padding:6px;background:#ffebee;border-radius:4px;font-size:12px"><span class="highlight">关键瓶颈：</span>team(ATL)→T 容量 = 83−83 = <strong>0</strong></div>';
+  render();
+}
+
+function showCert(){
+  demoMode=false;viewMode='cert';
+  if(autoTimer){clearInterval(autoTimer);autoTimer=null;document.getElementById('btnAuto').textContent='▶ 自动播放';}
+  document.getElementById('btnPrev').disabled=true;
+  document.getElementById('btnNext').disabled=true;
+  document.getElementById('btnAuto').disabled=true;
+  document.getElementById('stepLabel').textContent='证书模式';
+  document.getElementById('rightTitle').textContent='最大流判定';
+  document.getElementById('rightContent').innerHTML='<p style="font-size:12px;line-height:1.5">满流（F = G<sub>x</sub>）⇒ 未被淘汰<br>无法满流（F < G<sub>x</sub>）⇒ <span class="highlight">被淘汰</span></p><div style="font-size:13px;margin-top:6px;padding:6px;background:#fff3e0;border-radius:4px">源点总容量 G<sub>x</sub> = 6 + 1 = <strong>7</strong><br>最大流 F = <span class="highlight"><strong>6</strong></span><br>F < G<sub>x</sub> ⇒ <span class="highlight" style="font-size:14px"><strong>Philadelphia 被淘汰</strong></span></div>';
+  document.getElementById('certSet').style.opacity='1';
+  document.getElementById('ineqBox').style.opacity='1';
+  document.getElementById('certExplain').style.opacity='1';
+  render();
+}
+
+function resetAll(){
+  demoMode=false;viewMode='init';stepIdx=0;
+  if(autoTimer){clearInterval(autoTimer);autoTimer=null;document.getElementById('btnAuto').textContent='▶ 自动播放';}
+  document.getElementById('btnPrev').disabled=true;
+  document.getElementById('btnNext').disabled=true;
+  document.getElementById('btnAuto').disabled=true;
+  document.getElementById('stepLabel').textContent='点击"分步演示"开始';
+  document.getElementById('logBox').innerHTML='<div style="color:#999">点击"分步演示"开始</div>';
+  document.getElementById('rightTitle').textContent='最大流判定';
+  document.getElementById('rightContent').innerHTML='<p style="font-size:12px;line-height:1.5">满流（F = G<sub>x</sub>）⇒ 未被淘汰<br>无法满流（F < G<sub>x</sub>）⇒ <span class="highlight">被淘汰</span></p><div style="font-size:13px;margin-top:6px;padding:6px;background:#fff3e0;border-radius:4px">源点总容量 G<sub>x</sub> = 6 + 1 = <strong>7</strong><br>最大流 F = <span class="highlight"><strong>6</strong></span><br>F < G<sub>x</sub> ⇒ <span class="highlight" style="font-size:14px"><strong>Philadelphia 被淘汰</strong></span></div>';
+  document.getElementById('certSet').style.opacity='1';
+  document.getElementById('ineqBox').style.opacity='1';
+  document.getElementById('certExplain').style.opacity='1';
+  render();
+}
+
+// ===== INIT =====
+render();
+</script>
+</body>
+</html>

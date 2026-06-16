@@ -1,0 +1,157 @@
+\documentclass[UTF8,fontset=none]{ctexart}
+\usepackage[a4paper,margin=2.2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{xcolor}
+
+\setCJKmainfont{Songti SC}
+\setCJKsansfont{PingFang SC}
+\setCJKmonofont{PingFang SC}
+
+\algrenewcommand\algorithmiccomment[1]{\hfill\(\triangleright\) #1}
+\floatname{algorithm}{算法}
+
+\begin{document}
+
+\section*{实验六第二章伪代码}
+
+本文件用于存放实验报告第二章“最大流算法基础与可行流思想”中需要插入的伪代码。算法主体使用英文描述，注释使用中文说明，便于在 Word 报告中截图插入。
+
+\begin{algorithm}[H]
+\caption{Residual Network Construction}
+\begin{algorithmic}[1]
+\Require Directed graph $G=(V,E)$, capacity $c(u,v)$, current flow $f(u,v)$
+\Ensure Residual graph $G_f=(V,E_f)$ with residual capacity $c_f$
+\State $E_f \gets \emptyset$
+\For{each edge $(u,v) \in E$}
+    \State $forward \gets c(u,v)-f(u,v)$
+    \If{$forward > 0$}
+        \State add edge $(u,v)$ to $E_f$ with capacity $forward$
+        \Comment{正向边表示还能继续增加的流量}
+    \EndIf
+    \If{$f(u,v) > 0$}
+        \State add edge $(v,u)$ to $E_f$ with capacity $f(u,v)$
+        \Comment{反向边表示可以撤回并重新分配的流量}
+    \EndIf
+\EndFor
+\State \Return $G_f$
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[H]
+\caption{Edmonds-Karp Maximum Flow}
+\begin{algorithmic}[1]
+\Require Flow network $G=(V,E)$, source $s$, sink $t$, capacity $c(u,v)$
+\Ensure Maximum flow value $maxFlow$
+\For{each edge $(u,v) \in E$}
+    \State $f(u,v) \gets 0$
+    \Comment{初始时所有边流量为 0}
+\EndFor
+\State $maxFlow \gets 0$
+\While{there exists an augmenting path $P$ from $s$ to $t$ found by BFS}
+    \State $\Delta \gets \min\{c_f(u,v) \mid (u,v) \in P\}$
+    \Comment{路径瓶颈容量}
+    \For{each edge $(u,v) \in P$}
+        \If{$(u,v)$ is a forward edge}
+            \State $f(u,v) \gets f(u,v)+\Delta$
+            \Comment{沿正向边增加流量}
+        \Else
+            \State $f(v,u) \gets f(v,u)-\Delta$
+            \Comment{沿反向边撤回部分流量}
+        \EndIf
+    \EndFor
+    \State $maxFlow \gets maxFlow+\Delta$
+\EndWhile
+\State \Return $maxFlow$
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[H]
+\caption{Dinic Maximum Flow}
+\begin{algorithmic}[1]
+\Require Flow network $G=(V,E)$, source $s$, sink $t$, capacity $c(u,v)$
+\Ensure Maximum flow value $maxFlow$
+\State initialize all flows to $0$
+\State $maxFlow \gets 0$
+\While{BFS can build a level graph from $s$ to $t$}
+    \State $level[v] \gets$ distance from $s$ to $v$ in residual graph
+    \Comment{构造分层图，记录每层节点到源点的最短距离}
+    \State reset current arc pointer $cur[v]$ for every vertex $v$
+    \Comment{当前弧优化，避免重复扫描无效边}
+    \While{$pushed \gets \text{DFS}(s,\infty, level, cur)$ is greater than $0$}
+        \State $maxFlow \gets maxFlow+pushed$
+        \Comment{在同一个分层图中不断寻找阻塞流}
+    \EndWhile
+\EndWhile
+\State \Return $maxFlow$
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[H]
+\caption{DFS in Dinic Level Graph}
+\begin{algorithmic}[1]
+\Require Current vertex $u$, available flow $flow$, level array $level$, current arc array $cur$
+\Ensure Flow successfully pushed from $u$ to $t$
+\If{$u=t$}
+    \State \Return $flow$
+\EndIf
+\For{each edge $(u,v)$ starting from $cur[u]$}
+    \If{$c_f(u,v)>0$ and $level[v]=level[u]+1$}
+        \State $pushed \gets \text{DFS}(v,\min(flow,c_f(u,v)), level, cur)$
+        \Comment{沿分层图递归推流}
+        \If{$pushed>0$}
+            \State $c_f(u,v) \gets c_f(u,v)-pushed$
+            \State $c_f(v,u) \gets c_f(v,u)+pushed$
+            \Comment{更新正向边与反向边残量容量}
+            \State \Return $pushed$
+        \EndIf
+    \EndIf
+    \State $cur[u] \gets cur[u]+1$
+    \Comment{当前弧优化，跳过已无法推流的边}
+\EndFor
+\State \Return $0$
+\end{algorithmic}
+\end{algorithm}
+
+
+\begin{algorithm}[H]
+\caption{Build Baseball Flow Network}
+\begin{algorithmic}[1]
+\Require Teams $0,\dots,n-1$, wins $w$, remaining games $r$, game matrix $g$, target team $x$
+\Ensure Flow network $N_x$, total game capacity $G_x$, team-node map $teamNode$
+\State $M_x \gets w_x + r_x$
+\Comment{待判断球队的最高可能胜场}
+\For{each team $i \neq x$}
+    \If{$w_i > M_x$}
+        \State \Return trivial elimination by team $i$
+        \Comment{平凡淘汰，直接返回}
+    \EndIf
+\EndFor
+\State create source $s$ and sink $t$
+\State $G_x \gets 0$
+\For{each team $i \neq x$}
+    \State create team node $T_i$
+    \State $teamNode[i] \gets T_i$
+    \State add edge $(T_i,t)$ with capacity $M_x-w_i$
+    \Comment{限制球队 i 最多还能赢的场数}
+\EndFor
+\For{each pair of teams $(i,j)$ with $i<j$, $i \neq x$, $j \neq x$}
+    \If{$g_{ij}=0$}
+        \State continue
+        \Comment{没有剩余比赛，不需要建立比赛节点}
+    \EndIf
+    \State create game node $G_{ij}$
+    \State add edge $(s,G_{ij})$ with capacity $g_{ij}$
+    \Comment{这组剩余比赛必须产生的胜场数}
+    \State add edge $(G_{ij},T_i)$ with capacity $INF$
+    \State add edge $(G_{ij},T_j)$ with capacity $INF$
+    \Comment{胜场只能分配给参赛双方}
+    \State $G_x \gets G_x + g_{ij}$
+\EndFor
+\State \Return $N_x$, $G_x$, $teamNode$
+\end{algorithmic}
+\end{algorithm}
+
+\end{document}

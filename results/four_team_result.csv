@@ -1,0 +1,5 @@
+dataset,team,algorithm,eliminated,elimination_type,certificate,max_wins,total_game_capacity,maxflow,full_flow,game_nodes,team_nodes,flow_nodes,flow_edges,runtime_ms
+teams4.txt,Atlanta,dinic,False,none,,91,2,2,True,1,3,6,6,0.029125
+teams4.txt,Philadelphia,dinic,True,nontrivial,"Atlanta,New_York",83,7,6,False,2,3,7,9,0.019583
+teams4.txt,New_York,dinic,False,none,,84,4,4,True,3,3,8,12,0.011792
+teams4.txt,Montreal,dinic,True,trivial,Atlanta,80,0,0,,0,3,0,0,0.000417

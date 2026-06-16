@@ -1,0 +1,60 @@
+\documentclass[UTF8,fontset=none]{ctexart}
+\usepackage[a4paper,margin=2.2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{xcolor}
+
+\setCJKmainfont{Songti SC}
+\setCJKsansfont{PingFang SC}
+\setCJKmonofont{PingFang SC}
+
+\algrenewcommand\algorithmiccomment[1]{\hfill\(\triangleright\) #1}
+\floatname{algorithm}{算法}
+
+\begin{document}
+
+\section*{实验六第三章伪代码}
+
+本文件用于存放实验报告第三章“棒球赛问题的流网络构造”中需要插入的伪代码。算法主体使用英文描述，注释使用中文说明，便于在 Word 报告中截图插入。
+
+\begin{algorithm}[H]
+\caption{Build Baseball Flow Network}
+\begin{algorithmic}[1]
+\Require Teams $0,\dots,n-1$, wins $w$, remaining games $r$, game matrix $g$, target team $x$
+\Ensure Flow network $N_x$, total game capacity $G_x$, team-node map $teamNode$
+\State $M_x \gets w_x + r_x$
+\Comment{待判断球队的最高可能胜场}
+\For{each team $i \neq x$}
+    \If{$w_i > M_x$}
+        \State \Return trivial elimination by team $i$
+        \Comment{平凡淘汰，直接返回}
+    \EndIf
+\EndFor
+\State create source $s$ and sink $t$
+\State $G_x \gets 0$
+\For{each team $i \neq x$}
+    \State create team node $T_i$
+    \State $teamNode[i] \gets T_i$
+    \State add edge $(T_i,t)$ with capacity $M_x-w_i$
+    \Comment{限制球队 i 最多还能赢的场数}
+\EndFor
+\For{each pair of teams $(i,j)$ with $i<j$, $i \neq x$, $j \neq x$}
+    \If{$g_{ij}=0$}
+        \State continue
+        \Comment{没有剩余比赛，不需要建立比赛节点}
+    \EndIf
+    \State create game node $G_{ij}$
+    \State add edge $(s,G_{ij})$ with capacity $g_{ij}$
+    \Comment{这组剩余比赛必须产生的胜场数}
+    \State add edge $(G_{ij},T_i)$ with capacity $INF$
+    \State add edge $(G_{ij},T_j)$ with capacity $INF$
+    \Comment{胜场只能分配给参赛双方}
+    \State $G_x \gets G_x + g_{ij}$
+\EndFor
+\State \Return $N_x$, $G_x$, $teamNode$
+\end{algorithmic}
+\end{algorithm}
+
+\end{document}
