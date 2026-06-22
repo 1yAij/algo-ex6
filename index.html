@@ -33,6 +33,9 @@ tr.target td:first-child::after{content:' ★';color:#e65100;font-size:9px}
 .btn-sm{font-size:11px;padding:5px 0}
 .btn-row{display:flex;gap:4px}
 .btn-row .btn{flex:1}
+.algo-tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px}
+.algo-tab{font-size:11px;padding:6px 4px;border:1px solid #cfd6e6;background:#f8f9fc;color:#455a64;border-radius:6px;cursor:pointer;font-weight:700}
+.algo-tab.active{background:#1a237e;color:#fff;border-color:#1a237e}
 .panel-title{font-size:16px;font-weight:700;color:#1a237e;text-align:center}
 .panel-sub{font-size:11px;color:#666;text-align:center;margin-bottom:4px}
 #graphBox{flex:1;min-height:0}
@@ -52,6 +55,11 @@ tr.target td:first-child::after{content:' ★';color:#e65100;font-size:9px}
 .info-item{font-size:12px;margin:2px 0;display:flex;justify-content:space-between}
 .info-item .lbl{color:#666}
 .info-item .val{font-weight:600}
+.dinic-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:6px}
+.dinic-pill{background:#f8f9fc;border:1px solid #e0e3eb;border-radius:6px;padding:5px 6px;font-size:11px;line-height:1.45}
+.dinic-pill b{color:#1a237e}
+.dinic-wide{grid-column:1/-1}
+.mono-list{font-family:'SF Mono','Consolas',monospace;font-size:10px;color:#37474f;line-height:1.45}
 </style>
 </head>
 <body>
@@ -74,6 +82,10 @@ tr.target td:first-child::after{content:' ★';color:#e65100;font-size:9px}
 
   <div class="card" style="padding:8px 12px">
     <h3>操作</h3>
+    <div class="algo-tabs">
+      <button id="tabEk" class="algo-tab active" onclick="selectAlgorithm('ek')">Edmonds-Karp 演示</button>
+      <button id="tabDinic" class="algo-tab" onclick="selectAlgorithm('dinic')">Dinic 演示</button>
+    </div>
     <div class="btn-row" style="margin-bottom:4px"><button class="btn btn-model btn-sm" onclick="showModel()">显示建模</button><button class="btn btn-cert btn-sm" onclick="showCert()">显示证书</button></div>
     <div class="btn-row" style="margin-bottom:4px"><button class="btn btn-step btn-sm" onclick="startDemo()">分步演示</button><button class="btn btn-reset btn-sm" onclick="resetAll()">重置</button></div>
     <div class="btn-row" style="margin-bottom:4px"><button class="btn btn-sm" style="background:#37474f;color:#fff" id="btnPrev" onclick="goPrev()" disabled>◀ 上一步</button></div>
@@ -173,10 +185,48 @@ function pathEntry(edges,bottle){
   return {edges:edges,bottle:bottle,label:edges.map(function(id){return id.replace('e_','').replace(/_/g,'→').replace('s→','S→').replace('gan','game(ATL,NY)').replace('gam','game(ATL,MON)').replace('ta','team(ATL)').replace('tn','team(NY)').replace('tm','team(MON)');}).join(' → ')};
 }
 
-var STEPS = [];
+var EK_STEPS = [];
+var DINIC_LEVELS_1 = {S:0,G_AN:1,G_AM:1,T_A:2,T_N:2,T_M:2,T:3};
+var DINIC_LEVELS_2 = {S:0,G_AN:1,G_AM:null,T_A:2,T_N:2,T_M:null,T:null};
+var DINIC_LEVEL_EDGES_1 = ['e_s_gan','e_s_gam','e_gan_ta','e_gan_tn','e_gam_ta','e_gam_tm','e_tn_t','e_tm_t'];
+var DINIC_LEVEL_EDGES_2 = ['e_s_gan','e_gan_ta','e_gan_tn'];
+
+function flowAfter(updates){
+  var f = Object.assign({}, FLOW0);
+  Object.keys(updates||{}).forEach(function(id){f[id]=updates[id];});
+  return f;
+}
+
+function dinicStep(opts){
+  var defaults = {
+    mode:'dinic',
+    flow:Object.assign({},FLOW0),
+    hlNodes:[],
+    hlEdges:[],
+    bottleneckEdges:[],
+    certNodes:[],
+    pathDesc:'—',
+    bottleVal:'—',
+    curFlow:0,
+    totalCap:7,
+    conclusionType:'running',
+    levels:null,
+    levelEdges:[],
+    dfsPath:[],
+    curEdges:[],
+    blocking:false,
+    terminated:false,
+    phase:'Dinic',
+    blockingText:'尚未形成阻塞流',
+    curText:'cur[s] 指向第一条可用边',
+    levelText:'尚未构造分层图',
+    fullFlowText:'否，当前 F < Gx'
+  };
+  return Object.assign(defaults, opts);
+}
 
 // Step 0: Init
-STEPS.push({
+EK_STEPS.push({
   title:'初始化 Philadelphia 的最大流网络',
   mode:'init',
   flow:Object.assign({},FLOW0),
@@ -194,7 +244,7 @@ STEPS.push({
 });
 
 // Step 1: Find path 1
-STEPS.push({
+EK_STEPS.push({
   title:'第 1 轮：找到增广路径',
   mode:'path',
   flow:Object.assign({},FLOW0),
@@ -214,7 +264,7 @@ STEPS.push({
 // Step 2: Augment 1
 var flow2 = Object.assign({},FLOW0);
 flow2['e_s_gam']=1; flow2['e_gam_tm']=1; flow2['e_tm_t']=1;
-STEPS.push({
+EK_STEPS.push({
   title:'第 1 轮：沿路径增广 1',
   mode:'augment',
   flow:flow2,
@@ -232,7 +282,7 @@ STEPS.push({
 });
 
 // Step 3: Find path 2
-STEPS.push({
+EK_STEPS.push({
   title:'第 2 轮：找到增广路径',
   mode:'path',
   flow:flow2,
@@ -252,7 +302,7 @@ STEPS.push({
 // Step 4: Augment 5
 var flow4 = Object.assign({},flow2);
 flow4['e_s_gan']=5; flow4['e_gan_tn']=5; flow4['e_tn_t']=5;
-STEPS.push({
+EK_STEPS.push({
   title:'第 2 轮：沿路径增广 5',
   mode:'augment',
   flow:flow4,
@@ -270,7 +320,7 @@ STEPS.push({
 });
 
 // Step 5: Blocked
-STEPS.push({
+EK_STEPS.push({
   title:'第 3 轮：无法继续增广',
   mode:'blocked',
   flow:flow4,
@@ -288,7 +338,7 @@ STEPS.push({
 });
 
 // Step 6: Verdict
-STEPS.push({
+EK_STEPS.push({
   title:'最大流不满：Philadelphia 被淘汰',
   mode:'verdict',
   flow:flow4,
@@ -306,7 +356,7 @@ STEPS.push({
 });
 
 // Step 7: Certificate
-STEPS.push({
+EK_STEPS.push({
   title:'最小割证书：R = {Atlanta, New_York}',
   mode:'cert',
   flow:flow4,
@@ -323,10 +373,204 @@ STEPS.push({
   explain:'证书 R={Atlanta,New_York}：两队当前胜场 83+78=161，加内部剩余 6 场必产生 6 个胜场 = 167。但两队合计最多容纳 2×83=166。167>166，Philadelphia 不可能获得并列第一。',
 });
 
+var DINIC_STEPS = [
+  dinicStep({
+    title:'Dinic 初始化：F=0，准备 BFS 构造分层图',
+    phase:'初始化',
+    flow:flowAfter({}),
+    hlNodes:['S','G_AN','G_AM','T_A','T_N','T_M','T'],
+    explain:'Dinic 先在残量网络上用 BFS 给每个点分层，再只沿 level 增加 1 的边执行 DFS 推流。本例 Gx=7，目标是检查源点出边能否满流。',
+    conclusion:'准备执行第一轮 BFS',
+    levelText:'未生成',
+    curText:'cur 尚未初始化',
+    blockingText:'阻塞流尚未开始',
+    fullFlowText:'否，F=0 < 7'
+  }),
+  dinicStep({
+    title:'第一轮 BFS：生成分层图 level',
+    phase:'BFS 构造分层图',
+    flow:flowAfter({}),
+    levels:DINIC_LEVELS_1,
+    levelEdges:DINIC_LEVEL_EDGES_1,
+    hlNodes:['S','G_AN','G_AM','T_A','T_N','T_M','T'],
+    hlEdges:DINIC_LEVEL_EDGES_1,
+    explain:'BFS 从 S 出发得到 level[S]=0，两个比赛节点为 1，三个球队节点为 2，T 为 3。Atlanta 可以被访问到，因为比赛节点到 Atlanta 是无限容量；但 DFS 真正推流时 Atlanta→T 容量为 0，不能把流送到汇点。',
+    conclusion:'t 可达，进入当前分层图上的 DFS',
+    levelText:'S:0, G_ATL_NY:1, G_ATL_MON:1, Atlanta/NewYork/Montreal:2, t:3',
+    curText:'cur 初始化到每个点的第一条出边',
+    blockingText:'分层图已建立，尚未形成阻塞流',
+    fullFlowText:'否，F=0 < 7'
+  }),
+  dinicStep({
+    title:'DFS 路径 1：找到 S→G_ATL_NY→NewYork→t',
+    phase:'DFS 寻找可推流路径',
+    flow:flowAfter({}),
+    levels:DINIC_LEVELS_1,
+    levelEdges:DINIC_LEVEL_EDGES_1,
+    dfsPath:['e_s_gan','e_gan_tn','e_tn_t'],
+    curEdges:['e_s_gan','e_gan_tn','e_tn_t'],
+    hlNodes:['S','G_AN','T_N','T'],
+    hlEdges:['e_s_gan','e_gan_tn','e_tn_t'],
+    pathDesc:'S → game(ATL,NY) → team(NY) → T',
+    bottleVal:'min(6, ∞, 5) = 5',
+    explain:'DFS 只走 level 递增边。选择 ATL-NY 比赛节点后，New_York→T 还有 5 容量，因此得到一条可推流路径。',
+    conclusion:'路径瓶颈为 5',
+    levelText:'沿 0→1→2→3 的分层边前进',
+    curText:'cur[S]=S→G_ATL_NY, cur[G_ATL_NY]=G_ATL_NY→NewYork, cur[NewYork]=NewYork→t',
+    blockingText:'还未阻塞，找到第一条 DFS 路径',
+    fullFlowText:'否，F=0 < 7'
+  }),
+  dinicStep({
+    title:'沿路径 1 推流 5，NewYork→t 饱和',
+    phase:'DFS 推流与残量更新',
+    flow:flowAfter({e_s_gan:5,e_gan_tn:5,e_tn_t:5}),
+    levels:DINIC_LEVELS_1,
+    levelEdges:DINIC_LEVEL_EDGES_1,
+    dfsPath:['e_s_gan','e_gan_tn','e_tn_t'],
+    curEdges:['e_s_gan','e_gan_tn','e_tn_t'],
+    bottleneckEdges:['e_tn_t'],
+    hlNodes:['S','G_AN','T_N','T'],
+    hlEdges:['e_s_gan','e_gan_tn','e_tn_t'],
+    pathDesc:'S → game(ATL,NY) → team(NY) → T',
+    bottleVal:'推流 5',
+    curFlow:5,
+    explain:'更新正向流量和反向残量：S→G_ATL_NY 为 5/6，G_ATL_NY→NewYork 为 5/∞，NewYork→t 为 5/5。NewYork 的接收上限已经用完。',
+    conclusion:'F = 5，继续在同一分层图上 DFS',
+    levelText:'第一轮 level 保持不变',
+    curText:'NewYork→t 已饱和，cur 后续会跳过这条边',
+    blockingText:'尚未阻塞，源点仍有 G_ATL_MON 可尝试',
+    fullFlowText:'否，F=5 < 7'
+  }),
+  dinicStep({
+    title:'DFS 路径 2：找到 S→G_ATL_MON→Montreal→t',
+    phase:'DFS 继续寻找可推流路径',
+    flow:flowAfter({e_s_gan:5,e_gan_tn:5,e_tn_t:5}),
+    levels:DINIC_LEVELS_1,
+    levelEdges:DINIC_LEVEL_EDGES_1,
+    dfsPath:['e_s_gam','e_gam_tm','e_tm_t'],
+    curEdges:['e_s_gam','e_gam_tm','e_tm_t'],
+    hlNodes:['S','G_AM','T_M','T'],
+    hlEdges:['e_s_gam','e_gam_tm','e_tm_t'],
+    pathDesc:'S → game(ATL,MON) → team(MON) → T',
+    bottleVal:'min(1, ∞, 6) = 1',
+    curFlow:5,
+    explain:'当前分层图中还可以从 S 走到 ATL-MON 比赛节点，再把这 1 场胜利分配给 Montreal。该路径瓶颈由 S→G_ATL_MON 的容量 1 决定。',
+    conclusion:'路径瓶颈为 1',
+    levelText:'仍沿 0→1→2→3 的分层边前进',
+    curText:'cur[S] 推进到 S→G_ATL_MON, cur[G_ATL_MON]=G_ATL_MON→Montreal',
+    blockingText:'还未阻塞，找到第二条 DFS 路径',
+    fullFlowText:'否，F=5 < 7'
+  }),
+  dinicStep({
+    title:'沿路径 2 推流 1，G_ATL_MON 源边饱和',
+    phase:'DFS 推流与残量更新',
+    flow:flowAfter({e_s_gan:5,e_gan_tn:5,e_tn_t:5,e_s_gam:1,e_gam_tm:1,e_tm_t:1}),
+    levels:DINIC_LEVELS_1,
+    levelEdges:DINIC_LEVEL_EDGES_1,
+    dfsPath:['e_s_gam','e_gam_tm','e_tm_t'],
+    curEdges:['e_s_gam','e_gam_tm','e_tm_t'],
+    bottleneckEdges:['e_s_gam'],
+    hlNodes:['S','G_AM','T_M','T'],
+    hlEdges:['e_s_gam','e_gam_tm','e_tm_t'],
+    pathDesc:'S → game(ATL,MON) → team(MON) → T',
+    bottleVal:'推流 1',
+    curFlow:6,
+    explain:'更新后 S→G_ATL_MON 为 1/1，G_ATL_MON→Montreal 为 1/∞，Montreal→t 为 1/6。当前最大流达到 6，但 Gx=7，仍差 1。',
+    conclusion:'F = 6，继续尝试当前分层图',
+    levelText:'第一轮 level 保持不变',
+    curText:'G_ATL_MON 已无源端残量，cur 回到剩余的 G_ATL_NY 分支检查',
+    blockingText:'尚未正式阻塞，还需确认没有 DFS 路径',
+    fullFlowText:'否，F=6 < 7'
+  }),
+  dinicStep({
+    title:'DFS 继续尝试：当前分层图形成阻塞流',
+    phase:'阻塞流确认',
+    flow:flowAfter({e_s_gan:5,e_gan_tn:5,e_tn_t:5,e_s_gam:1,e_gam_tm:1,e_tm_t:1}),
+    levels:DINIC_LEVELS_1,
+    levelEdges:DINIC_LEVEL_EDGES_1,
+    curEdges:['e_s_gan','e_gan_ta','e_gan_tn','e_ta_t','e_tn_t'],
+    bottleneckEdges:['e_ta_t','e_tn_t'],
+    certNodes:['T_A','T_N','G_AN'],
+    hlNodes:['S','G_AN','T_A','T_N','T'],
+    hlEdges:['e_s_gan','e_gan_ta','e_gan_tn','e_ta_t','e_tn_t'],
+    pathDesc:'无可达 t 的 DFS 路径',
+    bottleVal:'0',
+    curFlow:6,
+    blocking:true,
+    explain:'G_ATL_NY 还剩 1 个胜场没有分配，但它只能给 Atlanta 或 New_York。Atlanta→t 容量 0，NewYork→t 已满 5/5，所以 DFS 无法继续把流送到 t。',
+    conclusion:'当前分层图已形成阻塞流',
+    conclusionType:'alert',
+    levelText:'第一轮 level 中虽有 Atlanta/NewYork，但通向 t 的有效残量被堵住',
+    curText:'cur[G_ATL_NY] 扫过 Atlanta 与 NewYork 两个方向后失效',
+    blockingText:'Blocking Flow Reached：在该 level 图内再无 s-t 可推流路径',
+    fullFlowText:'否，F=6 < 7'
+  }),
+  dinicStep({
+    title:'第二轮 BFS：t 不可达',
+    phase:'重新 BFS',
+    flow:flowAfter({e_s_gan:5,e_gan_tn:5,e_tn_t:5,e_s_gam:1,e_gam_tm:1,e_tm_t:1}),
+    levels:DINIC_LEVELS_2,
+    levelEdges:DINIC_LEVEL_EDGES_2,
+    curEdges:['e_s_gan','e_gan_ta','e_gan_tn'],
+    bottleneckEdges:['e_ta_t','e_tn_t','e_s_gam'],
+    certNodes:['T_A','T_N','G_AN'],
+    hlNodes:['S','G_AN','T_A','T_N'],
+    hlEdges:['e_s_gan','e_gan_ta','e_gan_tn'],
+    pathDesc:'BFS 无法到达 t',
+    bottleVal:'—',
+    curFlow:6,
+    terminated:true,
+    explain:'从 S 仍能到达 G_ATL_NY，因为 S→G_ATL_NY 还有残量 1；但 G_ATL_NY 只能到 Atlanta 或 New_York，二者都无法继续通过正残量边到达 t。汇点不可达，Dinic 终止。',
+    conclusion:'t 不可达，Dinic 终止',
+    conclusionType:'alert',
+    levelText:'S:0, G_ATL_NY:1, Atlanta/NewYork:2, G_ATL_MON/Montreal/t:不可达',
+    curText:'新一轮不再初始化 DFS cur，因为 t 已不可达',
+    blockingText:'上一轮阻塞流之后，残量网络不存在 s-t 路径',
+    fullFlowText:'否，F=6 < 7'
+  }),
+  dinicStep({
+    title:'Dinic 结束：Philly 被非平凡淘汰',
+    phase:'最终判定',
+    flow:flowAfter({e_s_gan:5,e_gan_tn:5,e_tn_t:5,e_s_gam:1,e_gam_tm:1,e_tm_t:1}),
+    levels:DINIC_LEVELS_2,
+    levelEdges:DINIC_LEVEL_EDGES_2,
+    bottleneckEdges:['e_ta_t','e_tn_t','e_s_gam'],
+    certNodes:['T_A','T_N','G_AN'],
+    hlNodes:['G_AN','T_A','T_N'],
+    hlEdges:['e_s_gan','e_gan_ta','e_gan_tn','e_ta_t','e_tn_t'],
+    pathDesc:'—',
+    bottleVal:'—',
+    curFlow:6,
+    terminated:true,
+    explain:'Dinic 得到最大流 F=6。源点总容量 Gx=7，没有满流，因此 Philly 被非平凡淘汰。证据集 R={Atlanta, New_York}，不等式为 83+78+6=167 > 2×83=166。',
+    conclusion:'<b>maxflow = 6 < 7，因此 Philly 被非平凡淘汰</b>',
+    conclusionType:'final',
+    levelText:'最终残量网络中 t 不可达',
+    curText:'算法结束，无当前弧',
+    blockingText:'最大流已确定，最小割给出证书 R={Atlanta, New_York}',
+    fullFlowText:'否，6/7 未满流'
+  })
+];
+
+var STEPS = EK_STEPS;
+
 // ===== STATE =====
 var demoMode = false;
 var stepIdx = 0;
 var viewMode = 'init'; // 'init'|'model'|'demo'|'cert'
+var currentAlgorithm = 'ek';
+
+function algorithmName(){
+  return currentAlgorithm === 'dinic' ? 'Dinic 演示' : 'Edmonds-Karp 演示';
+}
+
+function isDinicStep(step){
+  return currentAlgorithm === 'dinic' && step && step.mode === 'dinic';
+}
+
+function setStepSource(){
+  STEPS = currentAlgorithm === 'dinic' ? DINIC_STEPS : EK_STEPS;
+}
 
 // ===== SVG RENDER =====
 function render(){
@@ -345,6 +589,9 @@ function render(){
   var bottleneckEdges = step ? step.bottleneckEdges : [];
   var certNodes = step ? step.certNodes : [];
   var flow = step ? step.flow : FLOW0;
+  var levelEdges = isDinicStep(step) ? (step.levelEdges||[]) : [];
+  var dfsPath = isDinicStep(step) ? (step.dfsPath||[]) : [];
+  var curEdges = isDinicStep(step) ? (step.curEdges||[]) : [];
 
   // In model-only mode
   if(viewMode==='model' && !demoMode){
@@ -380,13 +627,21 @@ function render(){
     var ex=fv.x-30*ux, ey=fv.y-30*uy;
     var isHL=hlEdges.indexOf(e.id)>=0;
     var isBot=bottleneckEdges.indexOf(e.id)>=0;
-    var color=isBot?'#c62828':(isHL?'#e65100':'#aabbcc');
-    var w=isBot?3.5:(isHL?2.5:1.5);
-    var mk=isBot?'url(#arrRed)':(isHL?'url(#arrHL)':'url(#arr)');
-    var dash=isHL&&!isBot?' stroke-dasharray="6,3"':'';
-    var opacity=(demoMode||viewMode==='model'||viewMode==='cert')?(isHL||isBot?1:0.25):0.7;
+    var isLevel=levelEdges.indexOf(e.id)>=0;
+    var isDfs=dfsPath.indexOf(e.id)>=0;
+    var isCur=curEdges.indexOf(e.id)>=0;
+    var color=isBot?'#c62828':(isDfs?'#e65100':(isLevel?'#1565c0':(isHL?'#e65100':'#aabbcc')));
+    var w=isBot?3.5:(isDfs?4:(isCur?3:(isLevel?2.5:(isHL?2.5:1.5))));
+    var mk=isBot?'url(#arrRed)':(isDfs?'url(#arrHL)':(isLevel?'url(#arrBlue)':(isHL?'url(#arrHL)':'url(#arr)')));
+    var dash=(isLevel&&!isDfs&&!isBot)?' stroke-dasharray="7,5"':(isHL&&!isBot&&!isDfs?' stroke-dasharray="6,3"':'');
+    var opacity=(demoMode||viewMode==='model'||viewMode==='cert')?(isHL||isBot||isLevel||isDfs||isCur?1:0.2):0.7;
     if(!demoMode&&viewMode==='init')opacity=0.7;
     s+='<line x1="'+sx+'" y1="'+sy+'" x2="'+ex+'" y2="'+ey+'" stroke="'+color+'" stroke-width="'+w+'" marker-end="'+mk+'"'+dash+' opacity="'+opacity+'"/>';
+    if(isCur){
+      var cx=sx+(ex-sx)*0.62, cy=sy+(ey-sy)*0.62;
+      s+='<circle cx="'+cx+'" cy="'+cy+'" r="8" fill="#fff" stroke="#263238" stroke-width="2" opacity="0.95"/>';
+      s+='<text x="'+cx+'" y="'+(cy+0.5)+'" text-anchor="middle" dominant-baseline="middle" font-size="8" fill="#263238" font-weight="800">cur</text>';
+    }
 
     // Label: flow/capacity in demo mode
     var mx=(sx+ex)/2, my=(sy+ey)/2, px=-uy*18, py=ux*18;
@@ -437,13 +692,26 @@ function render(){
     if(n.sub){
       g+='<text x="'+n.x+'" y="'+(n.y+(shape==='rect'?30:40))+'" text-anchor="middle" font-size="9" fill="#666">容量='+n.sub+'</text>';
     }
+    if(isDinicStep(step) && step.levels){
+      var lv = step.levels[n.id];
+      var lvText = (lv===null || lv===undefined) ? 'level=∞' : 'level='+lv;
+      var lvColor = (lv===null || lv===undefined) ? '#999' : '#1565c0';
+      g+='<text x="'+n.x+'" y="'+(n.y-(shape==='rect'?28:38))+'" text-anchor="middle" font-size="10" fill="'+lvColor+'" font-weight="700">'+lvText+'</text>';
+    }
     g+='</g>';
     s+=g;
   });
 
+  if(isDinicStep(step) && (step.blocking || step.terminated)){
+    var banner = step.terminated ? 't 不可达，Dinic 终止' : 'Blocking Flow Reached';
+    var fill = step.terminated ? '#c62828' : '#e65100';
+    s+='<rect x="330" y="18" width="340" height="34" rx="8" fill="'+fill+'" opacity="0.92"/>';
+    s+='<text x="500" y="40" text-anchor="middle" font-size="15" fill="#fff" font-weight="800">'+banner+'</text>';
+  }
+
   // Bottom caption
   if(demoMode && step){
-    s+='<text x="500" y="550" text-anchor="middle" font-size="11" fill="#555">Step '+(stepIdx+1)+'/'+STEPS.length+' · '+step.title+'</text>';
+    s+='<text x="500" y="550" text-anchor="middle" font-size="11" fill="#555">'+algorithmName()+' · Step '+(stepIdx+1)+'/'+STEPS.length+' · '+step.title+'</text>';
   } else if(viewMode==='model'){
     s+='<text x="500" y="550" text-anchor="middle" font-size="11" fill="#555">S=剩余胜场来源 | 比赛节点=必须分配的胜场 | 球队节点=接收方 | T=合法终点</text>';
   } else if(viewMode==='cert'){
@@ -469,6 +737,16 @@ function updateRight(){
   var html = '';
   html += '<div class="step-title">'+step.title+'</div>';
   html += '<div class="explain" style="margin-bottom:6px">'+step.explain+'</div>';
+  if(isDinicStep(step)){
+    html += '<div class="dinic-grid">';
+    html += '<div class="dinic-pill"><b>当前阶段</b><br>'+step.phase+'</div>';
+    html += '<div class="dinic-pill"><b>当前最大流</b><br>F = '+step.curFlow+' / Gx = '+step.totalCap+'</div>';
+    html += '<div class="dinic-pill"><b>是否满流</b><br>'+step.fullFlowText+'</div>';
+    html += '<div class="dinic-pill"><b>阻塞流解释</b><br>'+step.blockingText+'</div>';
+    html += '<div class="dinic-pill dinic-wide"><b>分层图 level</b><div class="mono-list">'+step.levelText+'</div></div>';
+    html += '<div class="dinic-pill dinic-wide"><b>当前弧 cur</b><div class="mono-list">'+step.curText+'</div></div>';
+    html += '</div>';
+  }
   html += '<div class="info-item"><span class="lbl">增广路径：</span><span class="val" style="color:#e65100">'+step.pathDesc+'</span></div>';
   html += '<div class="info-item"><span class="lbl">瓶颈：</span><span class="val">'+step.bottleVal+'</span></div>';
   html += '<div class="info-item"><span class="lbl">当前 F：</span><span class="val">'+step.curFlow+'</span></div>';
@@ -487,20 +765,30 @@ function addLog(msg, cls){
 }
 
 // ===== NAVIGATION =====
+function selectAlgorithm(algo){
+  currentAlgorithm = algo === 'dinic' ? 'dinic' : 'ek';
+  setStepSource();
+  document.getElementById('tabEk').classList.toggle('active', currentAlgorithm==='ek');
+  document.getElementById('tabDinic').classList.toggle('active', currentAlgorithm==='dinic');
+  resetAll();
+}
+
 function goToStep(idx){
+  setStepSource();
   if(idx<0||idx>=STEPS.length)return;
   stepIdx=idx;
   updateRight();
   render();
   document.getElementById('btnPrev').disabled=(stepIdx===0);
   document.getElementById('btnNext').disabled=(stepIdx===STEPS.length-1);
-  document.getElementById('stepLabel').textContent='Step '+(stepIdx+1)+'/'+STEPS.length;
+  document.getElementById('stepLabel').textContent=algorithmName()+' · Step '+(stepIdx+1)+'/'+STEPS.length;
 }
 
 function startDemo(){
+  setStepSource();
   demoMode=true;viewMode='demo';stepIdx=0;
   document.getElementById('logBox').innerHTML='';
-  addLog('[Step 1] 初始化网络，G<sub>x</sub>=7，F=0','lhl');
+  addLog('[Step 1] '+STEPS[0].title,'lhl');
   goToStep(0);
   document.getElementById('btnAuto').disabled=false;
 }
@@ -511,8 +799,9 @@ function goNext(){
   stepIdx++;
   goToStep(stepIdx);
   var s=STEPS[stepIdx];
-  var cls=s.mode==='cert'||s.mode==='verdict'||s.mode==='blocked'?'lcut':'lhl';
-  addLog('[Step '+(stepIdx+1)+'] '+s.title,cls);
+  var cls=s.mode==='cert'||s.mode==='verdict'||s.mode==='blocked'||s.blocking||s.terminated?'lcut':'lhl';
+  var extra=isDinicStep(s)?'｜'+s.phase+'｜F='+s.curFlow+'/'+s.totalCap:'';
+  addLog('[Step '+(stepIdx+1)+'] '+s.title+extra,cls);
 }
 
 function goPrev(){
@@ -537,7 +826,7 @@ function showModel(){
   document.getElementById('btnPrev').disabled=true;
   document.getElementById('btnNext').disabled=true;
   document.getElementById('btnAuto').disabled=true;
-  document.getElementById('stepLabel').textContent='建模模式';
+  document.getElementById('stepLabel').textContent=algorithmName()+' · 建模模式';
   document.getElementById('rightTitle').textContent='最大流建模';
   document.getElementById('rightContent').innerHTML='<p style="font-size:12px;line-height:1.5">S → 比赛节点 → 球队节点 → T<br><br>S→G: 剩余比赛场数<br>G→T_i, T_j: 胜场分配给参赛方<br>T_i→T: M<sub>x</sub>−w<sub>i</sub>（容量上限）</p><div style="margin-top:6px;padding:6px;background:#ffebee;border-radius:4px;font-size:12px"><span class="highlight">关键瓶颈：</span>team(ATL)→T 容量 = 83−83 = <strong>0</strong></div>';
   render();
@@ -549,7 +838,7 @@ function showCert(){
   document.getElementById('btnPrev').disabled=true;
   document.getElementById('btnNext').disabled=true;
   document.getElementById('btnAuto').disabled=true;
-  document.getElementById('stepLabel').textContent='证书模式';
+  document.getElementById('stepLabel').textContent=algorithmName()+' · 证书模式';
   document.getElementById('rightTitle').textContent='最大流判定';
   document.getElementById('rightContent').innerHTML='<p style="font-size:12px;line-height:1.5">满流（F = G<sub>x</sub>）⇒ 未被淘汰<br>无法满流（F < G<sub>x</sub>）⇒ <span class="highlight">被淘汰</span></p><div style="font-size:13px;margin-top:6px;padding:6px;background:#fff3e0;border-radius:4px">源点总容量 G<sub>x</sub> = 6 + 1 = <strong>7</strong><br>最大流 F = <span class="highlight"><strong>6</strong></span><br>F < G<sub>x</sub> ⇒ <span class="highlight" style="font-size:14px"><strong>Philadelphia 被淘汰</strong></span></div>';
   document.getElementById('certSet').style.opacity='1';
@@ -559,13 +848,14 @@ function showCert(){
 }
 
 function resetAll(){
+  setStepSource();
   demoMode=false;viewMode='init';stepIdx=0;
   if(autoTimer){clearInterval(autoTimer);autoTimer=null;document.getElementById('btnAuto').textContent='▶ 自动播放';}
   document.getElementById('btnPrev').disabled=true;
   document.getElementById('btnNext').disabled=true;
   document.getElementById('btnAuto').disabled=true;
-  document.getElementById('stepLabel').textContent='点击"分步演示"开始';
-  document.getElementById('logBox').innerHTML='<div style="color:#999">点击"分步演示"开始</div>';
+  document.getElementById('stepLabel').textContent='点击"分步演示"开始 · '+algorithmName();
+  document.getElementById('logBox').innerHTML='<div style="color:#999">点击"分步演示"开始 · '+algorithmName()+'</div>';
   document.getElementById('rightTitle').textContent='最大流判定';
   document.getElementById('rightContent').innerHTML='<p style="font-size:12px;line-height:1.5">满流（F = G<sub>x</sub>）⇒ 未被淘汰<br>无法满流（F < G<sub>x</sub>）⇒ <span class="highlight">被淘汰</span></p><div style="font-size:13px;margin-top:6px;padding:6px;background:#fff3e0;border-radius:4px">源点总容量 G<sub>x</sub> = 6 + 1 = <strong>7</strong><br>最大流 F = <span class="highlight"><strong>6</strong></span><br>F < G<sub>x</sub> ⇒ <span class="highlight" style="font-size:14px"><strong>Philadelphia 被淘汰</strong></span></div>';
   document.getElementById('certSet').style.opacity='1';
